@@ -1,4 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
+import type {
+  BetaWebSearchTool20260209,
+  BetaCodeExecutionTool20260120,
+  BetaMessageParam,
+} from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
 import { readFileTool, writeFileTool, listFilesTool } from "./tools.js";
 
 const SYSTEM_PROMPT = `You are a capable AI research and coding assistant with access to:
@@ -9,18 +14,13 @@ const SYSTEM_PROMPT = `You are a capable AI research and coding assistant with a
 Use tools proactively to give accurate, verified answers. When asked to write code or
 analyze data, use the code execution tool to run it and show the results.`;
 
-// Server-side tools handled entirely by Anthropic's infrastructure
-const SERVER_TOOLS = [
-  { type: "web_search_20260209" as const, name: "web_search" as const },
-  { type: "code_execution_20260120" as const, name: "code_execution" as const },
+// Server-side tools — handled entirely by Anthropic's infrastructure
+const SERVER_TOOLS: (BetaWebSearchTool20260209 | BetaCodeExecutionTool20260120)[] = [
+  { type: "web_search_20260209", name: "web_search" },
+  { type: "code_execution_20260120", name: "code_execution" },
 ];
 
 const CUSTOM_TOOLS = [readFileTool, writeFileTool, listFilesTool];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ALL_TOOLS = [...CUSTOM_TOOLS, ...SERVER_TOOLS] as any[];
-
-type BetaMessageParam = Anthropic.Beta.BetaMessageParam;
 
 export class Agent {
   private client: Anthropic;
@@ -38,20 +38,18 @@ export class Agent {
     this.history.push({ role: "user", content: userMessage });
 
     let finalText = "";
-    let iterationCount = 0;
 
     const runner = this.client.beta.messages.toolRunner({
       model: "claude-opus-4-6",
       max_tokens: 16000,
       thinking: { type: "adaptive" },
       system: SYSTEM_PROMPT,
-      tools: ALL_TOOLS,
+      tools: [...CUSTOM_TOOLS, ...SERVER_TOOLS],
       messages: this.history,
       stream: true,
     });
 
     for await (const messageStream of runner) {
-      iterationCount++;
       let iterationText = "";
 
       for await (const event of messageStream) {
@@ -73,19 +71,12 @@ export class Agent {
         }
       }
 
-      // Accumulate text from each iteration; only the final non-tool iteration
-      // produces the response we care about for history
       if (iterationText) {
         finalText = iterationText;
       }
     }
 
-    if (iterationCount > 1) {
-      // Multi-step: blank line between tool activity and final answer
-      process.stdout.write("\n");
-    }
-
-    // Store only the final assistant text in history to keep context clean
+    // Store the final assistant response in history for multi-turn context
     if (finalText) {
       this.history.push({ role: "assistant", content: finalText });
     }

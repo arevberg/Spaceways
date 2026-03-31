@@ -25,12 +25,11 @@ export const readFileTool = betaZodTool({
       .string()
       .describe("Path to the file, relative to the workspace root"),
   }),
-  run: async ({ file_path }) => {
-    const safe = safeJoin(WORKSPACE_DIR, file_path);
+  run: async (args) => {
+    const safe = safeJoin(WORKSPACE_DIR, args.file_path);
     if (!safe) return "Error: path traversal outside workspace is not allowed";
     try {
-      const content = await fs.readFile(safe, "utf-8");
-      return content;
+      return await fs.readFile(safe, "utf-8");
     } catch (err) {
       return `Error reading file: ${err instanceof Error ? err.message : String(err)}`;
     }
@@ -49,13 +48,13 @@ export const writeFileTool = betaZodTool({
       .describe("Path to the file, relative to the workspace root"),
     content: z.string().describe("The content to write to the file"),
   }),
-  run: async ({ file_path, content }) => {
-    const safe = safeJoin(WORKSPACE_DIR, file_path);
+  run: async (args) => {
+    const safe = safeJoin(WORKSPACE_DIR, args.file_path);
     if (!safe) return "Error: path traversal outside workspace is not allowed";
     try {
       await fs.mkdir(path.dirname(safe), { recursive: true });
-      await fs.writeFile(safe, content, "utf-8");
-      return `Successfully wrote ${content.length} characters to ${file_path}`;
+      await fs.writeFile(safe, args.content, "utf-8");
+      return `Successfully wrote ${args.content.length} characters to ${args.file_path}`;
     } catch (err) {
       return `Error writing file: ${err instanceof Error ? err.message : String(err)}`;
     }
@@ -75,8 +74,9 @@ export const listFilesTool = betaZodTool({
         "Directory to list, relative to workspace root. Defaults to workspace root.",
       ),
   }),
-  run: async ({ directory = "." }) => {
-    const safe = safeJoin(WORKSPACE_DIR, directory);
+  run: async (args) => {
+    const dir = args.directory ?? ".";
+    const safe = safeJoin(WORKSPACE_DIR, dir);
     if (!safe) return "Error: path traversal outside workspace is not allowed";
     try {
       await fs.mkdir(safe, { recursive: true }); // ensure workspace exists
