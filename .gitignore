@@ -3,3 +3,6 @@ dist/
 .env
 workspace/
 *.js.map
+__pycache__/
+*.pyc
+.venv/
